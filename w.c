@@ -571,15 +571,6 @@ int main(int argc, char *argv[]){
 
     }
 
-    // char* cmd1[] = {"ls", "-l", NULL};
-    // char* cmd2[] = {"echo", "Hello", "World", NULL};
-    // char* cmd3[] = {"cat", "fib.c", NULL};
-
-    // add_process(1, cmd1, 1, 10);
-    // add_process(2, cmd2, 2, 20);
-    // add_process(3, cmd3, 3, 30);
-    // add_process(4, cmd3, 4, 40);
-    // write_shared_memory();
 
     pid_t pid = fork();
     if(pid == 0){
