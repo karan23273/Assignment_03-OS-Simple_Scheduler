@@ -32,17 +32,6 @@ typedef struct Queue {
     int top;
 } Queue;
 
-// Function prototypes
-Queue* createQueue();
-bool overflow(Queue* q);
-bool empty(Queue* q);
-void push(Queue* q, Process* x);
-void pop(Queue* q);
-Process* front(Queue* q);
-void read_shared_memory();
-void cleanup_shared_memory();
-void signal_handler(int signum);
-
 // Function to create a new Queue
 Queue* createQueue() {
     Queue* q = (Queue*)malloc(sizeof(Queue));
