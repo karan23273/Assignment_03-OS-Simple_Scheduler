@@ -7,7 +7,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include<sys/time.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -15,11 +15,10 @@
 
 #define QUEUE_SIZE 100
 
-// Global variable to hold the shared memory file descriptor
-int shm_file;
+int shm_file;  // Shared memory file descriptor
 
-// Process structure for shared memory
-long get_time() {                  // calculating the time required for running the code
+// Function to get current time in microseconds
+long get_time() {
     struct timeval time_now;
     gettimeofday(&time_now, NULL);
     return time_now.tv_sec * 1000000L + time_now.tv_usec;
@@ -27,7 +26,7 @@ long get_time() {                  // calculating the time required for running 
 
 // Queue structure
 typedef struct Queue {
-    Process arr[QUEUE_SIZE];  // Change to store Process objects directly
+    Process arr[QUEUE_SIZE];
     int front;
     int top;
 } Queue;
@@ -44,17 +43,15 @@ Queue* createQueue() {
     return q;
 }
 
-// Function to check for queue overflow
+// Queue utility functions
 bool overflow(Queue* q) {
     return (q->top == QUEUE_SIZE - 1);
 }
 
-// Function to check if queue is empty
 bool empty(Queue* q) {
     return (q->front == -1 || q->front > q->top);
 }
 
-// Function to push a process into the queue
 void push(Queue* q, Process* x) {
     if (overflow(q)) {
         printf("Queue Overflow\n");
@@ -64,11 +61,9 @@ void push(Queue* q, Process* x) {
         q->front = 0;
     }
     q->top++;
-    // Store a copy of the Process structure in the queue
     memcpy(&q->arr[q->top], x, sizeof(Process));
 }
 
-// Function to pop a process from the queue
 void pop(Queue* q) {
     if (empty(q)) {
         printf("Queue is empty\n");
@@ -81,7 +76,6 @@ void pop(Queue* q) {
     }
 }
 
-// Function to get the front process from the queue
 Process* front(Queue* q) {
     if (empty(q)) {
         printf("Queue is empty\n");
@@ -90,6 +84,7 @@ Process* front(Queue* q) {
     return &q->arr[q->front];
 }
 
+// Global queues
 Queue* Ready_queue;
 Queue* Running_queue;
 Queue* Complete_queue;
@@ -111,20 +106,20 @@ void receive() {
 
     printf("Reading data from shared memory:\n");
     for (int i = 0; i < MAX_PROCESSES; i++) {
-        if (share_data[i].id != 0) { // Check if the process is initialized
+        if (share_data[i].id != 0) {
             // printf("Process ID: %d\n", share_data[i].id);
             // printf("Priority: %d\n", share_data[i].priority);
             // printf("Burst Time: %ld\n", share_data[i].burst);
             // printf("Command: ");
             for (int j = 0; j < MAX_ARG; j++) {
-                if (share_data[i].cmd[j][0] != '\0') { // Check if the command is valid
+                if (share_data[i].cmd[j][0] != '\0') {
                     printf("%s ", share_data[i].cmd[j]);
                 } else {
-                    break; // Break on the first empty command
+                    break;
                 }
             }
             // printf("\n");
-            push(Ready_queue, &share_data[i]); // Store a copy of the process
+            push(Ready_queue, &share_data[i]);
             // printf("Process %d pushed successfully\n", i + 1);
         }
     }
@@ -133,151 +128,99 @@ void receive() {
     close(shm_file);
 }
 
-
+// Convert process command to argument array
 char** convert_cmd_to_args(char cmd[MAX_ARG][256]) {
-    char **args = (char **)malloc((MAX_ARG + 1) * sizeof(char *)); // +1 for NULL termination
-    if (args == NULL) {
-        perror("Failed to allocate memory for args");
-        return NULL;
-    }
-
+    char **args = (char **)malloc((MAX_ARG + 1) * sizeof(char *));
     int i = 0;
-    while (i < MAX_ARG && cmd[i][0] != '\0') { // Check for non-empty strings
-        args[i] = (char *)malloc(strlen(cmd[i]) + 1); // +1 for NULL terminator
-        if (args[i] == NULL) {
-            perror("Failed to allocate memory for args[i]");
-            // Free previously allocated memory before returning
-            for (int j = 0; j < i; j++) {
-                free(args[j]);
-            }
-            free(args);
-            return NULL;
-        }
-        strcpy(args[i], cmd[i]); // Copy the string
+    while (i < MAX_ARG && cmd[i][0] != '\0') {
+        args[i] = strdup(cmd[i]);
         i++;
     }
-
-    args[i] = NULL; // Null-terminate the args array
+    args[i] = NULL;
     return args;
 }
 
 void free_args(char **args) {
-    if (args != NULL) {
-        for (int i = 0; args[i] != NULL; i++) {
-            free(args[i]); // Free each string
-        }
-        free(args);
+    for (int i = 0; args[i] != NULL; i++) {
+        free(args[i]);
     }
+    free(args);
 }
 
-
-void execute(int *completed, int n, long timeQuantum){
-    int i = 0;
-    long currentTime;
-    while (i<n && !empty(Ready_queue))
-    {
-        Process* p1 = front(Ready_queue);
-        push(Running_queue, p1);
-        pop(Ready_queue);
-        i++;
-
+void execute(Queue* ready, Queue* complete, long timeQuantum) {
+    Process* current;
+    while (!empty(ready)) {
+        current = front(ready);
+        pop(ready);
         
+        pid_t pid = fork();
+        if (pid == 0) {
+            // In child process
+            char **args = convert_cmd_to_args(current->cmd);
+            execvp(args[0], args);
+            perror("exec failed");  // execvp only returns on error
+            free_args(args);
+            exit(EXIT_FAILURE);
+        } else {
+            // In parent process: Control the child execution
+            current->id = pid;
+            long startTime = get_time();
+            int status;
 
-        if (p1->remaining > 0) {
-            // Execute the process for a time quantum or its remaining burst time
+            while (get_time() - startTime < timeQuantum && waitpid(pid, &status, WNOHANG) == 0) {
+                usleep(1000); // Small delay to avoid busy waiting
+            }
 
-            if (p1->id != 0)
-            {
-                currentTime = get_time();
-
-                char **args= convert_cmd_to_args(p1->cmd);
-                if (execvp(args[0],args) == -1)
-                {
-                    perror("Process not executed");
+            if (waitpid(pid, &status, WNOHANG) == 0) {
+                kill(pid, SIGSTOP); // Stop process if it exceeded timeQuantum
+                current->remaining -= timeQuantum;
+                if (current->remaining > 0) {
+                    push(ready, current); // Requeue the process if not done
                 }
-                p1->id = getpid();
-                free_args(args);
-                
-            }else
-            {
-                kill(p1->id, SIGCONT);
+            } else {
+                // Process completed within time quantum
+                current->completion = get_time();
+                push(complete, current); // Move to completed queue
             }
-            
-            
-            
-            int executionTime = (p1->remaining < timeQuantum) ? p1->remaining : timeQuantum;
-            p1->remaining -= executionTime;
-            currentTime += executionTime;
-
-
-            // If the process is completed
-            if (p1->remaining == 0) {
-                p1->completion = currentTime;
-                (*completed)++;
-                push(Complete_queue, p1);
-
-            }else
-            {
-                push(Ready_queue,p1);
-
-                kill(p1->id, SIGSTOP);
-            }
-            
-        }else
-        {
-            push(Complete_queue, p1);
         }
-        
-
     }
-    
 }
 
-
-void roundRobinScheduling( int* n, long timeQuantum) {
-    long currentTime;
+void roundRobinScheduling(int* n, long timeQuantum) {
     int completed = 0;
+    receive();  // Populate initial queue from shared memory
+    execute(Ready_queue, Complete_queue, timeQuantum);
 
-    // Loop until all processes are completed
-    while (completed < *n) {
-        
-        // receive
-        receive();
-
-        execute(&completed ,*n, timeQuantum);
-
+    // Print completion times and calculate waiting times, etc.
+    printf("\nProcess\tCompletion\n");
+    while (!empty(Complete_queue)) {
+        Process* current = front(Complete_queue);
+        printf("P%d\t%ld\n", current->id, current->completion);
+        pop(Complete_queue);
     }
-
 }
-
 
 void cleanup_shared_memory() {
-    // Remove shared memory
     if (shm_unlink(SHM_NAME) == -1) {
         perror("Failed to remove shared memory");
     }
 }
 
-// Signal handler for cleaning up
 void signal_handler(int signum) {
     printf("Received signal %d, cleaning up shared memory.\n", signum);
     cleanup_shared_memory();
     exit(EXIT_SUCCESS);
 }
 
-// Main function
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        printf("Arguments not found");
+        fprintf(stderr, "Usage: %s <number_of_CPUs> <time_quantum>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
     int nCPUs = atoi(argv[1]);
     long timeQuantum = atol(argv[2]); 
-    if (nCPUs <= 0 || timeQuantum <= 0) {
-        fprintf(stderr, "Invalid arguments: number of CPUs and time quantum must be positive integers.\n");
-        exit(EXIT_FAILURE);
-    }
+
 
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
@@ -288,12 +231,11 @@ int main(int argc, char* argv[]) {
 
     roundRobinScheduling(&nCPUs, timeQuantum);
 
+    cleanup_shared_memory();
 
     free(Ready_queue);
     free(Running_queue);
     free(Complete_queue);
-
-    cleanup_shared_memory();
 
     return 0;
 }
