@@ -525,7 +525,7 @@ void handler(int signal){
     switch (signal)
     {
     case SIGINT:
-        // write(STDOUT_FILENO, " Caught signal interrupt\n",25);
+        write(STDOUT_FILENO, " Caught signal interrupt\n",25);
         // show_pids(history, command_index);
         // exit(EXIT_SUCCESS);
         kill(scheduler_pid, SIGCONT);
