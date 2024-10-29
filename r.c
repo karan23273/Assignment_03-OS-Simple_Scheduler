@@ -310,7 +310,7 @@ void signal_handler(int signum) {
 // Main function
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        fprintf(stderr, "Usage: %s <number_of_CPUs> <time_quantum>\n", argv[0]);
+        printf("Arguments not found");
         exit(EXIT_FAILURE);
     }
 
