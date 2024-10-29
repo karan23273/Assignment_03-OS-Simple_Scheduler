@@ -112,10 +112,10 @@ void receive() {
     printf("Reading data from shared memory:\n");
     for (int i = 0; i < MAX_PROCESSES; i++) {
         if (share_data[i].id != 0) { // Check if the process is initialized
-            printf("Process ID: %d\n", share_data[i].id);
-            printf("Priority: %d\n", share_data[i].priority);
-            printf("Burst Time: %ld\n", share_data[i].burst);
-            printf("Command: ");
+            // printf("Process ID: %d\n", share_data[i].id);
+            // printf("Priority: %d\n", share_data[i].priority);
+            // printf("Burst Time: %ld\n", share_data[i].burst);
+            // printf("Command: ");
             for (int j = 0; j < MAX_ARG; j++) {
                 if (share_data[i].cmd[j][0] != '\0') { // Check if the command is valid
                     printf("%s ", share_data[i].cmd[j]);
@@ -123,9 +123,9 @@ void receive() {
                     break; // Break on the first empty command
                 }
             }
-            printf("\n");
+            // printf("\n");
             push(Ready_queue, &share_data[i]); // Store a copy of the process
-            printf("Process %d pushed successfully\n", i + 1);
+            // printf("Process %d pushed successfully\n", i + 1);
         }
     }
 
@@ -246,51 +246,9 @@ void roundRobinScheduling( int* n, long timeQuantum) {
 
         execute(&completed ,*n, timeQuantum);
 
-
-        // for (int i = 0; i < n; i++) {
-        //     // Check if the process has remaining burst time
-        //     if (processes[i].remaining > 0) {
-        //         // Execute the process for a time quantum or its remaining burst time
-        //         int executionTime = (processes[i].remaining < timeQuantum) ? processes[i].remaining : timeQuantum;
-        //         processes[i].remaining -= executionTime;
-        //         currentTime += executionTime;
-
-        //         // Print the process execution for demonstration
-        //         printf("Time %d - %d: P%d\n", currentTime - executionTime, currentTime, processes[i].id);
-
-        //         // If the process is completed
-        //         if (processes[i].remaining == 0) {
-        //             processes[i].completion = currentTime;
-        //             completed++;
-        //         }
-        //     }
-        // }
     }
 
-    // Calculate waiting time for each process
-    // for (int i = 0; i < *n; i++) {
-    //     processes[i].waiting = processes[i].completion - processes[i].burst;
-    // }
-
-    // // Display process details
-    // printf("\nProcess\tBurst\tCompletion\tWaiting\n");
-    // for (int i = 0; i < *n; i++) {
-    //     printf("P%d\t%ld\t%ld\t\t%ld\n", processes[i].id, processes[i].burst, processes[i].completion, processes[i].waiting);
-    // }
-
-    // // Calculate and display average waiting and completion times
-    // float totalWaitingTime = 0;
-    // float totalCompletionTime = 0;
-    // for (int i = 0; i < *n; i++) {
-    //     totalWaitingTime += processes[i].waiting;
-    //     totalCompletionTime += processes[i].completion;
-    // }
-    // printf("\nAverage Waiting Time: %.2f\n", totalWaitingTime / *n);
-    // printf("Average Completion Time: %.2f\n", totalCompletionTime / *n);
 }
-
-
-
 
 
 void cleanup_shared_memory() {
@@ -330,20 +288,6 @@ int main(int argc, char* argv[]) {
 
     roundRobinScheduling(&nCPUs, timeQuantum);
 
-    // receive();
-
-
-
-    if (empty(Ready_queue)){
-        printf("Submission not successful\n");
-    } else {
-        printf("Submission successful\n");
-        while (!empty(Ready_queue)) {
-            Process* current_process = front(Ready_queue);
-            printf("Command: %s\n", current_process->cmd[0]);
-            pop(Ready_queue);
-        }
-    }
 
     free(Ready_queue);
     free(Running_queue);
