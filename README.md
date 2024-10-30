@@ -10,4 +10,6 @@ completeQueue for completed processes.
 Sets STDIN_FILENO to non-blocking mode, allowing continuous checking for new commands without pausing the main loop.
 submit Command: If the user inputs a command starting with "submit", it:
 Extracts the command following "submit", forks a child process, and stops it immediately with SIGSTOP.
-Initializes a Process structure with the process ID, arrival time, and other fields, then adds it to readyQueue
+Initializes a Process structure with the process ID, arrival time, and other fields, then adds it to readyQueue.
+If readyQueue is non-empty and no process is currently executing, it Calls round_robin() to start executing the next process. Records the start time for this execution (temp) and sets executing to 1.
+If the time slice (tslice) has elapsed since starting the current process, it calls stop() to stop the current process and sets executing back to 0 to pick the next one.
