@@ -86,7 +86,6 @@ Process* front(Queue* q) {
 
 // Global queues
 Queue* Ready_queue;
-Queue* Running_queue;
 Queue* Complete_queue;
 
 // Function to read process data from shared memory
@@ -107,20 +106,8 @@ void receive() {
     printf("Reading data from shared memory:\n");
     for (int i = 0; i < MAX_PROCESSES; i++) {
         if (share_data[i].id != 0) {
-            // printf("Process ID: %d\n", share_data[i].id);
-            // printf("Priority: %d\n", share_data[i].priority);
-            // printf("Burst Time: %ld\n", share_data[i].burst);
-            // printf("Command: ");
-            for (int j = 0; j < MAX_ARG; j++) {
-                if (share_data[i].cmd[j][0] != '\0') {
-                    printf("%s ", share_data[i].cmd[j]);
-                } else {
-                    break;
-                }
-            }
-            // printf("\n");
+            // Push the valid process to the ready queue
             push(Ready_queue, &share_data[i]);
-            // printf("Process %d pushed successfully\n", i + 1);
         }
     }
 
@@ -147,49 +134,70 @@ void free_args(char **args) {
     free(args);
 }
 
-void execute(Queue* ready, Queue* complete, long timeQuantum) {
-    Process* current;
+void execute_round_robin(Queue* ready, Queue* complete, int n, long timeSlice) {
     while (!empty(ready)) {
-        current = front(ready);
-        pop(ready);
+        // Create a batch of up to n processes
+        int batch_size = 0;
+        pid_t pids[n];
+        Process* current_batch[n];
         
-        pid_t pid = fork();
-        if (pid == 0) {
-            // In child process
-            char **args = convert_cmd_to_args(current->cmd);
-            execvp(args[0], args);
-            perror("exec failed");  // execvp only returns on error
-            free_args(args);
-            exit(EXIT_FAILURE);
-        } else {
-            // In parent process: Control the child execution
-            current->id = pid;
-            long startTime = get_time();
-            int status;
-
-            while (get_time() - startTime < timeQuantum && waitpid(pid, &status, WNOHANG) == 0) {
-                usleep(1000); // Small delay to avoid busy waiting
-            }
-
-            if (waitpid(pid, &status, WNOHANG) == 0) {
-                kill(pid, SIGSTOP); // Stop process if it exceeded timeQuantum
-                current->remaining -= timeQuantum;
-                if (current->remaining > 0) {
-                    push(ready, current); // Requeue the process if not done
-                }
+        while (batch_size < n && !empty(ready)) {
+            current_batch[batch_size] = front(ready);
+            pop(ready);
+            
+            pid_t pid = fork();
+            if (pid == 0) {
+                // In child process
+                char **args = convert_cmd_to_args(current_batch[batch_size]->cmd);
+                execvp(args[0], args);
+                perror("exec failed");
+                exit(EXIT_FAILURE);
             } else {
-                // Process completed within time quantum
-                current->completion = get_time();
-                push(complete, current); // Move to completed queue
+                // Parent process
+                current_batch[batch_size]->id = pid;
+                pids[batch_size] = pid;
+                batch_size++;
+            }
+        }
+        
+        // Run the batch for timeSlice
+        long startTime = get_time();
+        for (int i = 0; i < batch_size; i++) {
+            kill(pids[i], SIGCONT); // Start each process in the batch
+        }
+        
+        usleep(timeSlice * 1000);  // Run each batch for timeSlice ms
+        
+        // Check each process in the batch
+        for (int i = 0; i < batch_size; i++) {
+            int status;
+            long runtime = get_time() - startTime;
+            pid_t result = waitpid(pids[i], &status, WNOHANG);
+            
+            if (result == 0 && runtime >= timeSlice) {
+                // TimeSlice expired, stop and requeue
+                kill(pids[i], SIGSTOP);
+                current_batch[i]->remaining -= timeSlice;
+                
+                if (current_batch[i]->remaining > 0) {
+                    push(ready, current_batch[i]);  // Requeue if not finished
+                } else {
+                    current_batch[i]->completion = get_time();
+                    push(complete, current_batch[i]);  // Move to Complete queue
+                }
+            } else if (result > 0) {
+                // Process completed
+                current_batch[i]->completion = get_time();
+                push(complete, current_batch[i]);
             }
         }
     }
 }
 
-void roundRobinScheduling(int* n, long timeQuantum) {
-    int completed = 0;
-    receive();  // Populate initial queue from shared memory
-    execute(Ready_queue, Complete_queue, timeQuantum);
+// Scheduler function
+void roundRobinScheduling(int n, long timeSlice) {
+    receive();  // Load processes into the Ready_queue from shared memory
+    execute_round_robin(Ready_queue, Complete_queue, n, timeSlice);
 
     // Print completion times and calculate waiting times, etc.
     printf("\nProcess\tCompletion\n");
@@ -214,27 +222,24 @@ void signal_handler(int signum) {
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        fprintf(stderr, "Usage: %s <number_of_CPUs> <time_quantum>\n", argv[0]);
+        printf("Usage: %s <numCPUs> <timeQuantum>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
 
     int nCPUs = atoi(argv[1]);
     long timeQuantum = atol(argv[2]); 
 
-
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
     Ready_queue = createQueue();
-    Running_queue = createQueue();
     Complete_queue = createQueue();
 
-    roundRobinScheduling(&nCPUs, timeQuantum);
+    roundRobinScheduling(nCPUs, timeQuantum);
 
     cleanup_shared_memory();
 
     free(Ready_queue);
-    free(Running_queue);
     free(Complete_queue);
 
     return 0;
