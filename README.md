@@ -1,5 +1,5 @@
 We will have implemented both the processes in the a single file. This single file contains both the scheduler process and the shell process in a single file, both the processes are in a single file
-Tokenise function - it is used to partition the string into the token so that it can run using the execvp command. For example the string "ls -l" will be written as ["ls", "-l"] after the tokenise function.
+.Tokenise function - it is used to partition the string into the token so that it can run using the execvp command. For example the string "ls -l" will be written as ["ls", "-l"] after the tokenise function.
 Roundrobin function - it is a scheduling algorithm which runs a given n number of processes for a given a time quantum, or runs until the process has completed execution.
 For each process, the function first retrieves it from the runningQueue using front() and removes it with pop(). It tries to stop the process with kill(id, SIGSTOP), where id is the process ID. SIGSTOP is a signal to pause the process without terminating it.
 The program expects two command-line arguments: NCPU (number of CPUs) and TSLICE (time slice for each process). These arguments are stored in n and tslice after conversion to integers.
